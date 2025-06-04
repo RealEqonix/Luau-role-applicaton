@@ -1,0 +1,111 @@
+function DataManager.serializeItem(item: Instance)
+	return {
+		Name = item.Name,
+		BaseValue = item:GetAttribute("BaseValue"),
+		ItemName = item:GetAttribute("ItemName"),
+		Scale = item:GetAttribute("Scale")
+	}
+end
+
+function DataManager.serializeConsumable(item: Instance)
+	return {
+		Name = item.Name,
+		ItemName = item:GetAttribute("ItemName"),
+		Stacked = item:GetAttribute("Stacked")
+	}
+end
+
+function DataManager.deserializeItem(item)
+	local newItem = replicatedStorage.ItemTools:FindFirstChild(item["ItemName"], true):Clone()
+	
+	newItem:SetAttribute("BaseValue", item["BaseValue"])
+	newItem:SetAttribute("ItemName", item["ItemName"])
+	newItem:SetAttribute("Scale", item["Scale"])
+	
+	newItem.Name = item["Name"]
+	
+	return newItem
+end
+
+function DataManager.deserializeConsumable(item)
+	local newItem = replicatedStorage.Consumables:FindFirstChild(item["ItemName"], true):Clone()
+
+	newItem:SetAttribute("ItemName", item["ItemName"])
+	newItem:SetAttribute("Stacked", item["Stacked"])
+
+	newItem.Name = (newItem:GetAttribute("ItemName") .. " [".. newItem:GetAttribute("Stacked") .."]")
+
+	return newItem
+end
+
+
+function DataManager.AddToInventory(plr: Player, item: Instance)
+	local profile = DataManager.Profiles[plr]
+	if not profile then return end
+	
+	if item:HasTag("Item") then
+		table.insert(profile.Data.SavedInventory, DataManager.serializeItem(item))
+	elseif item:HasTag("Consumable") then
+		print("is a consumable")
+		
+		local serializedStackable = DataManager.serializeConsumable(item)
+		local counter = 0
+		
+		for _, v in profile.Data.SavedInventory do
+			if v["ItemName"] == serializedStackable["ItemName"] then
+				v["Stacked"] += 1
+				counter += 1
+			end
+		end
+		
+		if counter == 0 then
+			table.insert(profile.Data.SavedInventory, serializedStackable)
+		end
+		
+		print(profile.Data.SavedInventory)
+	end
+
+end
+
+function DataManager.RemoveFromInventory(plr: Player, item: Instance)
+	local profile = DataManager.Profiles[plr]
+	if not profile then return end
+
+	for i, v in profile.Data.SavedInventory do
+		if v["Name"] == item.Name and v["Scale"] == item:GetAttribute("Scale") then
+			table.remove(profile.Data.SavedInventory, i)
+			return
+		elseif v["Stacked"] then
+			table.remove(profile.Data.SavedInventory, i)
+		end
+	end
+end
+
+function DataManager.ClearInv(plr: Player)
+	local profile = DataManager.Profiles[plr]
+	if not profile then return end
+	
+	table.clear(profile.Data.SavedInventory)
+end
+
+function DataManager.AddShellings(plr: Player, amount: number)
+	local profile = DataManager.Profiles[plr]
+	if not profile then return end
+
+	profile.Data.Shellings += amount
+	plr.leaderstats.Shellings.Value = profile.Data.Shellings
+	replicatedStorage.Events.UpdateShellingStat:FireClient(plr, profile.Data.Shellings)
+end
+
+function DataManager.RemoveShellings(plr: Player, amount: number)
+	local profile = DataManager.Profiles[plr]
+	if not profile then return end
+
+	profile.Data.Shellings -= amount
+	plr.leaderstats.Shellings.Value = profile.Data.Shellings
+	replicatedStorage.Events.UpdateShellingStat:FireClient(plr, profile.Data.Shellings)
+end
+
+
+
+return DataManager
