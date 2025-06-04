@@ -1,0 +1,84 @@
+local serverScriptService = game:GetService("ServerScriptService")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+
+local dataManager = require(serverScriptService.Data.DataManager)
+local valueSheet = require(serverScriptService.ValueModule)
+
+replicatedStorage.Events.ItemPickup.OnServerEvent:Connect(function(plr: Player, item: Instance)
+	print("Picked up item Responded")
+	
+	local newTool = replicatedStorage.ItemTools:FindFirstChild(item.Name):Clone()
+	newTool.Name = (item.Name .." [x".. math.round(item:GetAttribute("Scale") * 100) / 100 .."]")
+	local oldSize = newTool.Handle.Size
+	newTool.Handle.Size = Vector3.new(oldSize.X * item:GetAttribute("Scale") * 2, oldSize.Y * item:GetAttribute("Scale"), oldSize.Z * item:GetAttribute("Scale"))
+	newTool.Handle.Model:ScaleTo(item:GetAttribute("Scale"))
+	
+	newTool:SetAttribute("ItemName", item.Name)
+	newTool:SetAttribute("Scale", item:GetAttribute("Scale"))
+	newTool:SetAttribute("BaseValue", valueSheet.BaseValues[item.Name])
+	
+	newTool:AddTag("Sellable")
+	
+	newTool.Parent = plr.Backpack
+	
+	dataManager.AddToInventory(plr, newTool)
+	
+	item:Destroy()
+end)
+
+replicatedStorage.Events.RemoveFromBackpack.OnServerEvent:Connect(function(plr: Player, item: Instance)
+	if item.Parent == plr.Character then
+		plr.Character:FindFirstChild(item.Name):Destroy()
+	else
+		plr.Backpack:FindFirstChild(item.Name):Destroy()
+	end
+	
+	dataManager.RemoveFromInventory(plr, item)
+end)
+
+replicatedStorage.Events.AddToInventory.OnServerEvent:Connect(function(plr, item)
+	if plr.Character:FindFirstChildWhichIsA("Tool") then
+		plr.Character:FindFirstChildWhichIsA("Tool").Parent = plr.Backpack
+	end
+	
+	local newItem = replicatedStorage.Consumables:FindFirstChild(item, true)
+	
+	print(newItem)
+	
+	if newItem:HasTag("Stackable") then
+		if #plr.Backpack:GetChildren() == 0 then
+			if not plr.Character:FindFirstChildWhichIsA("Tool") then
+				newItem = newItem:Clone()
+
+				newItem.Parent = plr.Backpack
+			end
+		end
+		
+		local consInInv
+		
+		for _, v in plr.Backpack:GetChildren() do
+			if v:GetAttribute("ItemName") == item then
+				consInInv = v
+			end
+		end
+		
+		local oldAmount = consInInv:GetAttribute("Stacked")
+		consInInv:SetAttribute("Stacked", oldAmount + 1)
+		
+		consInInv.Name = (consInInv:GetAttribute("ItemName") .." [".. consInInv:GetAttribute("Stacked").. "]")
+		
+		dataManager.AddToInventory(plr, newItem)
+	else
+		print("not stackable")
+		newItem = newItem:Clone()
+		newItem.Parent = plr.Backpack
+		
+		dataManager.AddToInventory(plr, newItem)
+	end
+	
+	
+end)
+
+replicatedStorage.Events.ClearInv.OnServerEvent:Connect(function(plr)
+	dataManager.ClearInv(plr)
+end)
