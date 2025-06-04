@@ -1,0 +1,384 @@
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local sfx = replicatedStorage.SFX
+
+local plr = game:GetService("Players").LocalPlayer
+local mouse = plr:GetMouse()
+
+local userInputService = game:GetService("UserInputService")
+local tweenService = game:GetService("TweenService")
+
+local Lighting = game:GetService("Lighting")
+local camera = workspace.CurrentCamera
+local highlight
+
+local blur = Lighting.Blur
+local tween = TweenInfo.new(
+	.5,
+	Enum.EasingStyle.Sine,
+	Enum.EasingDirection.InOut,
+	0,
+	false
+)
+
+local debounce = false
+
+replicatedStorage.Events.ResetDebounce.OnClientEvent:Connect(function()
+	debounce = false
+end)
+
+mouse.Move:Connect(function()
+	if not mouse.Target then
+		for _, v in workspace.LoadedNoobs:FindFirstChild(plr.Name):GetChildren() do
+			if v:FindFirstChild("Highlight") and v ~= mouse.Target then
+				v:FindFirstChild("Highlight"):Destroy()
+			end
+		end
+		return
+	end
+	
+	for _, v in workspace.LoadedNoobs:FindFirstChild(plr.Name):GetChildren() do
+		if v:FindFirstChild("Highlight") and v ~= mouse.Target then
+			v:FindFirstChild("Highlight"):Destroy()
+		end
+	end
+	
+	local target = mouse.Target
+	
+	if target:FindFirstChild("Highlight") then return end
+	
+	if target.Parent:HasTag("Noob") then
+		highlight = Instance.new("Highlight")
+		highlight.Name = "Highlight"
+		highlight.FillColor = Color3.fromRGB(239, 184, 56)
+		highlight.FillTransparency = .5
+		
+		highlight.Parent = target.Parent
+	end
+end)
+
+mouse.Button1Down:Connect(function()
+	if not mouse.Target then return end
+	
+	local target = mouse.Target
+	if not target.Parent:HasTag("Noob") then return end
+	
+	if plr.InvSpace.Value <= #plr.Inventory:GetChildren() then
+		task.spawn(function()
+			sfx.error:Play()
+		end)
+		plr.PlayerGui.Main.MaxNoobs.Visible = true
+		task.wait(1)
+		plr.PlayerGui.Main.MaxNoobs.Visible = false
+		return 
+	end
+	
+	if debounce == true then return end
+	
+	if tostring(target.Parent.Owner.Value) ~= plr.Name then return end
+	
+	debounce = true
+	
+	replicatedStorage.Events.PickedUpNoob:FireServer(target.Parent)
+	
+	for i, v in plr.PlayerGui.Main.HUD.Quest.RequirementHolder:GetChildren() do
+		if not v:IsA("UIListLayout") then
+			if v.Name == replicatedStorage.Targets:FindFirstChild(target.Parent.Name, true).Parent.Name then
+				local RequiredItems = v:GetAttribute("RequiredItems")
+				local AmountLeft = v:GetAttribute("AmountLeft")
+				
+				v:SetAttribute("AmountLeft", AmountLeft - 1)
+
+				print(v, RequiredItems, AmountLeft)
+			end
+		end
+	end
+	
+	task.spawn(function()
+		local noobInRS = replicatedStorage.Targets:FindFirstChild(target.Parent.Name, true)
+		local rarity = noobInRS.Parent.Name
+		
+		local Rarity = replicatedStorage.GuiElements.Rarities:FindFirstChild(rarity)
+		
+		local newNotif = replicatedStorage.GuiElements.NotificationHolder:Clone()
+		newNotif.TextLabel.TextColor3 = Rarity.TextColor3
+		newNotif.TextLabel.UIStroke.Color = Rarity.UIStroke.Color
+		
+		if target.Parent:GetAttribute("Perk") ~= "" then
+			newNotif.TextLabel.Text = ("[" .. target.Parent:GetAttribute("Perk") .."] [".. rarity .."] ".. target.Parent.Name)
+		else
+			newNotif.TextLabel.Text = ("[".. rarity .."] ".. target.Parent.Name)
+		end
+		
+		
+		newNotif.Parent = plr.PlayerGui.Main.Notification
+		
+		task.wait(1)
+		
+		newNotif:Destroy()
+	end)
+end)
+
+
+mouse.Button2Down:Connect(function()
+	local noobInRS
+	
+	if not mouse.Target then return end
+
+	local target = mouse.Target
+	if not target.Parent:HasTag("Noob") then return end
+	
+	task.spawn(function()
+		local newTween = tweenService:Create(blur, tween, {Size = 25})
+
+		newTween:Play()
+
+	end)
+	
+	local noob = target.Parent
+	
+	for i, v in replicatedStorage.Targets:GetChildren() do
+		if v:FindFirstChild(noob.Name) then
+			noobInRS = v:FindFirstChild(noob.Name)
+		end
+	end
+	
+	plr.PlayerGui.Main.Inspect.InspectElements.RarityHolder:ClearAllChildren()
+		
+	local price = noob:GetAttribute("Price")
+	
+	local RarityObj = replicatedStorage.GuiElements.Rarities:FindFirstChild(noobInRS.Parent.Name):Clone()
+	
+	local Inspect = plr.PlayerGui.Main.Inspect
+	local inspectElements = Inspect.InspectElements
+	
+	RarityObj.Parent = inspectElements.RarityHolder
+	
+	inspectElements.NameString.Text = noob.Name
+	inspectElements.Price.Text = ("Price: £".. price)
+	inspectElements.Description.Text = noob:GetAttribute("Description")
+	
+	local worldmodel = inspectElements.ViewportFrame.WorldModel
+	
+	for i, v in worldmodel:GetChildren() do
+		if v.Name ~= "Test" then
+			v:Destroy()
+		end
+	end
+	
+	local noobModel = noobInRS:Clone()
+
+	noobModel:PivotTo(worldmodel.Test:GetPivot())
+	noobModel.Parent = worldmodel
+	
+	local perk = noob:GetAttribute("Perk")
+
+	if perk == "Huge" or perk == "Massive" or perk == "Colossal" then
+		local newString = string.upper(perk)
+		inspectElements.PerkTemplate.Text = newString
+	end
+	
+	Inspect.Visible = true
+end)
+
+local function typeText(object,text,length)
+	task.spawn(function()
+		sfx.Typing:Play()
+	end)
+	for i = 1,#text,1 do
+		object.Text = string.sub(text,1,i)
+		wait(length)
+	end
+end
+
+local function coolDown(textObject)
+	local times = 5
+	local cooldownObj = textObject.Parent.Parent.Cooldown
+	cooldownObj.Enabled = true
+
+	textObject:AddTag("Cooldown")
+	
+	task.spawn(function()
+		repeat 
+			times -= 1 
+			task.wait(1)
+		until times == 0
+
+		cooldownObj.Enabled = false
+		textObject:RemoveTag("Cooldown")
+	end)
+end
+
+local function startQuest(textObj, text, difficulty, r1, r2, r3, reward, requirementList)
+	for i, v in requirementList do
+		local newInt = v[2]
+		local newString = v[1]
+
+		local newRequirement = replicatedStorage.GuiElements.QuestRequirement:Clone()
+
+		newRequirement.Name = newString
+
+		newRequirement:SetAttribute("AmountLeft", tonumber(newInt))
+		newRequirement:SetAttribute("RequiredItems", tonumber(newInt))
+
+		newRequirement.Text = ("(".. tonumber(newInt) - newRequirement:GetAttribute("AmountLeft") .."/".. newInt ..") ".. newString)
+		newRequirement.Parent = plr.PlayerGui.Main.HUD.Quest.RequirementHolder
+	end
+
+	local requirementHolder = plr.PlayerGui.Main.HUD.Quest.RequirementHolder
+
+	local function startFunc(v)
+		if v == nil then return end
+
+		local newTable = v:GetAttributes()
+
+		for attributeName, value in newTable do
+			task.spawn(function()
+				v:GetAttributeChangedSignal(attributeName):Wait()
+
+				print("Noticed Change")
+
+				local textLabel = v
+
+				local RequiredItems = textLabel:GetAttribute("RequiredItems")
+				local AmountLeft = textLabel:GetAttribute("AmountLeft")
+
+				if AmountLeft > 0 then
+					textLabel.Text = ("(".. RequiredItems - AmountLeft .."/".. RequiredItems ..") ".. textLabel.Name)
+
+					newTable = nil
+
+					task.spawn(startFunc, v)
+					return
+				else
+					textLabel.Text = ("(".. RequiredItems - AmountLeft .."/".. RequiredItems ..") ".. textLabel.Name)
+
+					textLabel.TextColor = BrickColor.new("Lime green")
+					textLabel:AddTag("Finished")
+
+					local finishedQuests = 0
+					local x = #requirementHolder:GetChildren() - 1
+
+					for i, v in requirementHolder:GetChildren() do
+						if v:HasTag("Finished") then
+							finishedQuests += 1
+						end
+					end
+
+					if finishedQuests == x then
+						print("Quest Complete")
+						coolDown(textObj)
+						replicatedStorage.Events.UpdateCredits:FireServer(plr, reward)
+
+						for i, v in requirementHolder:GetChildren() do
+							if not v:IsA("UIListLayout") then
+								v:Destroy()
+							end
+						end
+
+						requirementHolder.Parent.Visible = false
+						plr.PlayerGui.Main.HUD.Quest.Visible = false
+						
+						sfx.SellSound:Play()
+					end
+				end
+
+
+			end)
+		end
+	end
+
+	for i, v in requirementHolder:GetChildren() do
+
+		task.spawn(startFunc, v)
+	end
+end
+
+
+
+
+
+replicatedStorage.Events.DialogueSend.OnClientEvent:Connect(function(textObj, text, difficulty, r1, r2, r3, reward)
+	
+	if textObj:HasTag("Cooldown") then return end
+	
+	print(reward)
+	
+	for i, v in plr.PlayerGui.Main.QuestDialogue.Frame:GetChildren() do
+		if not v:IsA("UIListLayout") then
+			v:Destroy()
+		end
+	end
+	
+	local requirementList = {r1, r2, r3}
+	typeText(textObj, text, .03)
+	
+	task.wait(1)
+	sfx.Typing:Stop()
+	textObj.Text = ""
+
+
+	print("done typing")
+	
+	for i, v in plr.PlayerGui.Main.QuestDialogue.Frame:GetChildren() do
+		if not v:IsA("UIListLayout") then
+			v:Destroy()
+		end
+	end
+	
+	plr.PlayerGui.Main.QuestDialogue.Visible = true
+	
+	for i, v in requirementList do
+		local newInt = v[2]
+		local newString = v[1]
+
+		local newFrame = replicatedStorage.GuiElements.Requirement:Clone()
+		
+		newFrame.Text = ("- ".. newString .." ".. newInt)
+		newFrame.Parent = plr.PlayerGui.Main.QuestDialogue.Frame
+	end
+	
+	local choice
+	
+	task.spawn(function()
+		task.wait(plr.PlayerGui.Main.QuestDialogue.Accept.MouseButton1Click:Wait())
+		choice = "accept"
+		
+		plr.PlayerGui.Main.QuestDialogue.Visible = false
+		plr.PlayerGui.Main.HUD.Quest.Visible = true
+		
+		startQuest(textObj, text, difficulty, r1, r2, r3, reward, requirementList)
+		
+	end)
+	task.spawn(function()
+		task.wait(plr.PlayerGui.Main.QuestDialogue.Decline.MouseButton1Click:Wait())
+		choice = "decline"
+		
+		plr.PlayerGui.Main.HUD.Quest.Visible = false
+		plr.PlayerGui.Main.QuestDialogue.Visible = false
+
+		coolDown(textObj)
+		return
+	end)
+end)
+
+replicatedStorage.Events.CreateDialogue.OnClientEvent:Connect(function(textObj, text)
+	typeText(textObj, text, .03)
+
+	task.wait(1)
+	sfx.Typing:Stop()
+	textObj.Text = ""
+
+
+	print("done typing")
+	
+	local Upgrades = plr.PlayerGui.Main.Upgrades
+	
+	
+	Upgrades.Visible = true
+	
+	for _, frame in Upgrades.InventoryElements.ScrollingFrame:GetChildren() do
+		if not frame:IsA("UIListLayout") and frame.Name ~= "1" then
+			replicatedStorage.Events.ChangeStat:FireServer(frame, "Current: 1/","s")
+		end
+	end
+end)
